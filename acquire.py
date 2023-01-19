@@ -27,7 +27,7 @@ This is how you get rid of the Unnamed: 0 column:
 
 def wrangle_zillow():
     """
-    This function reads the telco_churn data from Codeup db into a df.
+    This function reads the zillow data from Codeup db into a df.
     Changes the names to be more readable.
     Drops null values.
     """
@@ -39,22 +39,21 @@ def wrangle_zillow():
         
         # read the SQL query into a dataframe
         query = """
-        SELECT bedroomcnt, bathroomcnt, calculatedfinishedsquarefeet,
-        taxvaluedollarcnt, yearbuilt, taxamount, fips
+        SELECT taxvaluedollarcnt, bedroomcnt, bathroomcnt,
+        calculatedfinishedsquarefeet, transactiondate
         FROM properties_2017
-        LEFT JOIN propertylandusetype USING (propertylandusetypeid)
-        WHERE  propertylandusedesc LIKE 'Single Family Residential';
+        LEFT JOIN predictions_2017 USING (parcelid)
+        WHERE propertylandusetypeid LIKE 261 AND transactiondate like '2017%%';
         """
         df = pd.read_sql(query, get_connection('zillow'))
         
         # Remove NAs. No significant change to data. tax_values upper outliers were affected the most.
         df = df.dropna()
         df.rename(columns = {'bedroomcnt': 'bedrooms', 'bathroomcnt': 'bathrooms',
-                             'calculatedfinishedsquarefeet': 'sqft', 'taxvaluedollarcnt':'tax_value',
-                             'yearbuilt':'year_built', 'taxamount':'tax_amount'}, inplace=True)
-        cols_outliers = ['bedrooms', 'bathrooms', 'sqft', 'tax_value', 'tax_amount']
+                             'calculatedfinishedsquarefeet': 'sqft', 'taxvaluedollarcnt':'tax_value'}, inplace=True)
+        cols_outliers = ['bedrooms', 'bathrooms', 'sqft', 'tax_value']
         for col in cols_outliers:
-            df = df[df[col] <= df[col].quantile(q=0.999)]
+            df = df[df[col] <= df[col].quantile(q=0.9999)]
         
         # Write that dataframe to disk for later. Called "caching" the data for later.
         df.to_csv(filename, index=False)
