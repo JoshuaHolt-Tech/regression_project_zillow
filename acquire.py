@@ -6,7 +6,6 @@ import seaborn as sns
 from scipy import stats
 
 from sklearn.model_selection import train_test_split
-from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import RobustScaler, MinMaxScaler, StandardScaler
 from sklearn.metrics import mean_squared_error
 
@@ -60,7 +59,6 @@ def wrangle_zillow():
         df = pd.read_sql(query2, get_connection('zillow'))
         
         # Remove NAs. No significant change to data. tax_values upper outliers were affected the most.
-        #df = df.dropna()
         df.rename(columns = {'bedroomcnt': 'bedrooms',
                              'bathroomcnt': 'bathrooms',
                              'calculatedfinishedsquarefeet': 'sqft',
@@ -71,8 +69,8 @@ def wrangle_zillow():
                              'fips':'County'}, 
                   inplace=True)
         df.County = df.County.map({6037.0:'Los Angeles', 6059.0:'Orange', 6111.0:'Ventura'})
-        df['latitude'] = df['latitude'] / 10000000
-        df['longitude'] = df['longitude'] / 100000000
+        df['latitude'] = df['latitude'] / 10_000_000
+        df['longitude'] = df['longitude'] / 100_000_000
 
         df['transactiondate'] = pd.to_datetime(df['transactiondate'])
         
@@ -96,6 +94,8 @@ def wrangle_zillow():
         df['has_garages'] = df['garagecarcnt'].notna().astype('int')
         df['garagecarcnt'].fillna(0, inplace=True)
         df['num_of_features'] = df[['pool','deck','hottub_spa', 'has_garages']].sum(axis=1)
+        df = df.dropna()
+
         cols_outliers = ['bedrooms', 'bathrooms', 'sqft', 'tax_value']
         for col in cols_outliers:
             df = df[df[col] <= df[col].quantile(q=0.99)]
