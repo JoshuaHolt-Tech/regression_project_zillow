@@ -34,7 +34,7 @@ def wrangle_zillow():
     filename = "zillow_2017.csv"
     
     if os.path.isfile(filename):
-        return pd.read_csv(filename)
+        return pd.read_csv(filename, parse_dates=['transactiondate'])
     else:
         
         # read the SQL query into a dataframe
@@ -43,14 +43,59 @@ def wrangle_zillow():
         calculatedfinishedsquarefeet, transactiondate
         FROM properties_2017
         LEFT JOIN predictions_2017 USING (parcelid)
-        WHERE propertylandusetypeid LIKE 261 AND transactiondate like '2017%%';
+        WHERE propertylandusetypeid LIKE 261 AND
+        transactiondate like '2017%%';
         """
-        df = pd.read_sql(query, get_connection('zillow'))
+        
+        query2 = """
+        SELECT taxvaluedollarcnt, bedroomcnt,
+        bathroomcnt, calculatedfinishedsquarefeet,
+        transactiondate, hashottuborspa, decktypeid,
+        garagecarcnt, poolcnt, fips, latitude, longitude
+        FROM properties_2017
+        LEFT JOIN predictions_2017 USING (parcelid)
+        WHERE propertylandusetypeid LIKE 261 AND
+        transactiondate like '2017%%';
+        """
+        df = pd.read_sql(query2, get_connection('zillow'))
         
         # Remove NAs. No significant change to data. tax_values upper outliers were affected the most.
-        df = df.dropna()
-        df.rename(columns = {'bedroomcnt': 'bedrooms', 'bathroomcnt': 'bathrooms',
-                             'calculatedfinishedsquarefeet': 'sqft', 'taxvaluedollarcnt':'tax_value'}, inplace=True)
+        #df = df.dropna()
+        df.rename(columns = {'bedroomcnt': 'bedrooms',
+                             'bathroomcnt': 'bathrooms',
+                             'calculatedfinishedsquarefeet': 'sqft',
+                             'taxvaluedollarcnt':'tax_value', 
+                             'hashottuborspa' : 'hottub_spa', 
+                             'decktypeid': 'deck', 
+                             'poolcnt': 'pool',
+                             'fips':'County'}, 
+                  inplace=True)
+        df.County = df.County.map({6037.0:'Los Angeles', 6059.0:'Orange', 6111.0:'Ventura'})
+        df['latitude'] = df['latitude'] / 10000000
+        df['longitude'] = df['longitude'] / 100000000
+
+        df['transactiondate'] = pd.to_datetime(df['transactiondate'])
+        
+        sqft_bins = [0, 200, 400, 600, 800, 1000, 1200, 1400,
+                     1600, 1800, 2000, 2200, 2400, 2600, 2800,
+                     3000, 3200, 3400, 3600, 3800, 4000, 4200,
+                     4400, 4600, 4800, 5000]        
+        bin_labels = [200, 400, 600, 800, 1000, 1200, 1400, 1600,
+                      1800, 2000, 2200, 2400, 2600, 2800, 3000,
+                      3200, 3400, 3600, 3800, 4000, 4200, 4400,
+                      4600, 4800, 5000]        
+        df['sqft_bins'] = pd.cut(df.sqft, bins = sqft_bins,
+                                 labels = bin_labels)        
+        value_bins = [0, 400000, 800000, 1200000, 1600000, 30000000]        
+        value_bin_labels = ['$400k', '$800k', '$1.2m', '$1.5m', '$1.5m+']
+        df['value_bins'] = pd.cut(df.tax_value, bins = value_bins,
+                                  labels = value_bin_labels)
+        df['hottub_spa'] = df['hottub_spa'].notna().astype('int')
+        df['deck'] = df['deck'].notna().astype('int')
+        df['pool'] = df['pool'].notna().astype('int')
+        df['has_garages'] = df['garagecarcnt'].notna().astype('int')
+        df['garagecarcnt'].fillna(0, inplace=True)
+        df['num_of_features'] = df[['pool','deck','hottub_spa', 'has_garages']].sum(axis=1)
         cols_outliers = ['bedrooms', 'bathrooms', 'sqft', 'tax_value']
         for col in cols_outliers:
             df = df[df[col] <= df[col].quantile(q=0.99)]
@@ -212,7 +257,9 @@ def explore_relationships(feature_list, train, target_col, visuals = False):
 
     feature_per_item = pd.DataFrame(metrics)
     if visuals == True:
-        sns.lineplot(data=feature_per_item, x='comparison', y='25%', legend='brief').set(title=f'{target_col} to {feature} comparison')
+        sns.lineplot(data=feature_per_item, x='comparison', y='25%',
+                             legend='brief').set(title=f'{target_col} to {feature} comparison',
+                                                 xlabel =f'{feature}', ylabel = f'{target_col}')
         sns.lineplot(data=feature_per_item, x='comparison', y='mean', markers=True)
         sns.lineplot(data=feature_per_item, x='comparison', y='50%')
         sns.lineplot(data=feature_per_item, x='comparison', y='75%')
