@@ -470,7 +470,7 @@ def sales_per_month(train):
     plt.xlim(left=0, right =3)
     plt.ylabel('Number of sales')
     plt.xlabel('Month of Sale')
-    plt.xticks([1, 2, 3, 4, 5, 6, 7, 8, 9],['Jan','Feb','Mar', 'April', 'May', 'Jun', 'July', 'Aug', 'Sept'])
+    plt.xticks([1, 2, 3, 4, 5, 6, 7, 8, 9, 10],['Jan','Feb','Mar', 'April', 'May', 'Jun', 'July', 'Aug', 'Sept', 'Oct'])
     plt.legend(title="Home Value Percentile", framealpha=1, facecolor="whitesmoke", edgecolor='dimgray')
 
     plt.show()
