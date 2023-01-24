@@ -153,7 +153,7 @@ def train_validate(df, stratify_col = None, random_seed=1969):
     train, validate = train_test_split(train, test_size=.2, stratify=stratify_arg, random_state = random_seed)
     return train, validate, test
 
-def check_p_val(p_val, h0, ha, alpha=0.05):
+def check_p_val(p_val, h0, ha, s=None, alpha=0.05):
     """
     Checks if p value is significant or not and prints the associated string
     """
@@ -162,9 +162,12 @@ def check_p_val(p_val, h0, ha, alpha=0.05):
     if p_val < alpha:
         print(f'We have evidence to reject the null hypothesis.')
         print(f'{ha}')
+        if s != None:
+            print(f'Significance level of: {round(s,4)}')
     else:
         print(f'We do not have evidence to reject the null hypothesis.')
         print(f'{h0}')
+    
 
 def explore_relationships(feature_list, train, target_col, visuals = False):
     """
@@ -217,7 +220,7 @@ def q1_stats_test(train):
     
     s, p_val = stats.spearmanr(train['sqft'], train['tax_value'])
     
-    check_p_val(p_val, h0, ha, alpha=0.05)
+    check_p_val(p_val, h0, ha, s, alpha=0.05)
     
 def q2_stats_test(train):
     """
@@ -229,7 +232,7 @@ def q2_stats_test(train):
 
     s, p_val = stats.spearmanr(train['bedrooms'], train['tax_value'])
     
-    check_p_val(p_val, h0, ha, alpha=0.05)
+    check_p_val(p_val, h0, ha, s, alpha=0.05)
     
 def q3_stats_test(train):
     """
@@ -241,7 +244,7 @@ def q3_stats_test(train):
 
     s, p_val = stats.spearmanr(train['bathrooms'], train['tax_value'])
     
-    check_p_val(p_val, h0, ha, alpha=0.05)
+    check_p_val(p_val, h0, ha, s, alpha=0.05)
     
 def q4_stats_test(train):
     """
@@ -253,7 +256,7 @@ def q4_stats_test(train):
     
     s, p_val = stats.spearmanr(train['num_of_features'], train['tax_value'])
     
-    check_p_val(p_val, h0, ha, alpha=0.05)
+    check_p_val(p_val, h0, ha, s, alpha=0.05)
 
 ##################### Functions for visuals ########################
 
@@ -382,6 +385,10 @@ def explore_num_features(train):
 
     
 def explore_counties(train):
+    """
+    This visualization shows how the fips codes can be used to identify counties.
+    """
+       
     sns.set_style('whitegrid', rc={'figure.facecolor':'gainsboro'})
     sns.relplot(data= train, x=train.latitude, y=train.longitude, hue=train.County, marker='.', palette='muted')
     plt.ylabel('Longitude', fontsize=12)
@@ -390,6 +397,10 @@ def explore_counties(train):
     plt.show()
     
 def explore_value_loc(train):
+    """
+    This visualiztion show the clusters of homes with similar value.
+    """
+
     train.rename(columns = {'value_bins':'House values'}, inplace=True)
     
     sns.set_style('whitegrid', rc={'figure.facecolor':'gainsboro'})
@@ -399,6 +410,71 @@ def explore_value_loc(train):
     plt.title("House locaitons")
     plt.show()
     
+def sales_per_month(train):
+    """
+    This beast of a visualization show the sales per month for homes in each percentile range.
+    """
+    #Sets the values for variables
+    metrics = []
+    top_cutoff = train['tax_value'].quantile(q=.75)
+    bottom_cutoff = train['tax_value'].quantile(q=.25)
+
+    #Builds the dataframes for each percentile
+    top_sellers = train[train['tax_value'] >= top_cutoff]
+    mid_sellers = train[(train['tax_value'] >= bottom_cutoff) & (train['tax_value'] < top_cutoff)]
+    bottom_sellers = train[train['tax_value'] <= bottom_cutoff]
+
+    #Grabs the count of houses sold in the bottom 25%
+    num_items = bottom_sellers.transactiondate.dt.month.unique()
+    num_items.sort()
+    for item in num_items:
+        temp_df = bottom_sellers[bottom_sellers.transactiondate.dt.month == item]['tax_value'].describe()
+        temp_metrics = {
+            'month': item,
+            'count' : round(temp_df[0],0)}
+        metrics.append(temp_metrics)
+
+    bottom_sale_date_df = pd.DataFrame(metrics)
+    
+    #Grabs the count of houses sold in the middle 50%
+    num_items = mid_sellers.transactiondate.dt.month.unique()
+    num_items.sort()
+    for item in num_items:
+        temp_df = mid_sellers[mid_sellers.transactiondate.dt.month == item]['tax_value'].describe()
+        temp_metrics = {
+            'month': item,
+            'count' : round(temp_df[0],0)}
+        metrics.append(temp_metrics)
+
+    mid_sale_date_df = pd.DataFrame(metrics)
+
+    #Grabs the count of houses sold in the top 25%
+    num_items = top_sellers.transactiondate.dt.month.unique()
+    num_items.sort()
+    for item in num_items:
+        temp_df = top_sellers[top_sellers.transactiondate.dt.month == item]['tax_value'].describe()
+        temp_metrics = {
+            'month': item,
+            'count' : round(temp_df[0],0)}
+        metrics.append(temp_metrics)
+
+    top_sale_date_df = pd.DataFrame(metrics)
+
+    
+    #Plots the data...finally
+    fig, ax = plt.subplots(facecolor='gainsboro', edgecolor='dimgray')
+    sns.set_style('whitegrid', rc={'figure.facecolor':'gainsboro'})
+    sns.lineplot(ax=ax, data=top_sale_date_df, x='month', y='count', color='blue', label='>74%', ci=None).set(title="Sales per month")
+    sns.lineplot(ax=ax, data=mid_sale_date_df, x='month', y='count', color='green',label='26-74%', ci=None)
+    sns.lineplot(ax=ax, data=bottom_sale_date_df, x='month', y='count', color='red', label='<26%', ci=None)
+    plt.xlim(left=0, right =3)
+    plt.ylabel('Number of sales')
+    plt.xlabel('Month of Sale')
+    plt.xticks([1, 2, 3, 4, 5, 6, 7, 8, 9],['Jan','Feb','Mar', 'April', 'May', 'Jun', 'July', 'Aug', 'Sept'])
+    plt.legend(title="Home Value Percentile", framealpha=1, facecolor="whitesmoke", edgecolor='dimgray')
+
+    plt.show()
+
     
 ##################### Modeling Functions ##########################
 
@@ -776,6 +852,7 @@ def final_test(df):
     ax.set_title('Lasso Lars results')
     ax.axhspan(0, baseline, facecolor='palegreen', alpha=0.2)
     ax.axhspan(baseline, ymax=450000, facecolor='red', alpha=0.3)
+    ax.set_ylabel('RMS Error')    
 
     #x_pos = [0.5, 1, 1.5]
     width = 0.25
